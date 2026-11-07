@@ -2,3 +2,4 @@
 
 .group-label{font-size:11px;font-weight:500;margin:17px 0 7px}
 @media(max-width:360px){.field-row{grid-template-columns:1fr}.intro>.secondary{display:none}.group-tabs{gap:4px}.card{padding:15px}.balance-equation strong{font-size:16px}}
+.work-grid{min-width:0}.work-grid>*{min-width:0}.field-row{grid-template-columns:repeat(2,minmax(0,1fr))}select,input{min-width:0}@media(max-width:1000px){.work-grid{grid-template-columns:minmax(0,1fr)}}@media(max-width:360px){.field-row{grid-template-columns:minmax(0,1fr)}}
