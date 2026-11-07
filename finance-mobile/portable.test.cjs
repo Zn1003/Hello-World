@@ -1,0 +1,17 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const M=require('./src/portable.js');
+const input={scenario:'ap-pay',balance:'10000.00',amount:'6000.00',secondBalance:'8000.00',mode:'journal',counterparty:'华南供应商'};
+const record={input,createdAt:'2026-11-07T00:00:00Z'};
+const backup=cases=>JSON.stringify({version:1,cases});
+test('兼容原版备份并保留金额与业务对象',()=>{const [c]=M.parseBackup(backup([record]));assert.equal(c.input.counterparty,'华南供应商');assert.equal(c.input.amount,'6000.00');assert.equal(c.input.secondBalance,'0');});
+test('相同金额的不同文本格式合并去重',()=>{const incoming=M.parseBackup(backup([{...record,input:{...input,balance:'10000',amount:'6000'}}]));const r=M.mergeCases([{...record,id:'original'}],incoming,()=> 'new');assert.equal(r.added,0);assert.equal(r.duplicates,1);assert.equal(r.cases[0].id,'original');});
+test('导入新案例分配本机 ID，保留已有案例',()=>{const r=M.mergeCases([],M.parseBackup(backup([record])),()=> 'local');assert.equal(r.added,1);assert.equal(r.cases[0].id,'local');});
+test('金额与业务无效时整包拒绝，不修改当前案例',()=>{const existing=[{...record,id:'old'}];assert.throws(()=>M.parseBackup(backup([record,{...record,input:{...input,amount:'10000.01'}}])),/第 2 条/);assert.equal(existing.length,1);});
+test('拒绝错误版本、未知业务、超大文件和非 JSON',()=>{for(const s of ['invalid','{}',JSON.stringify({version:2,cases:[]}),backup([{input:{...input,scenario:'unknown'}}]),'x'.repeat(2000001)])assert.throws(()=>M.parseBackup(s));});
+test('拒绝备份中的非法凭证处理方式',()=>assert.throws(()=>M.parseBackup(backup([{input:{...input,mode:'unsupported'}}])),/无效/));
+test('拒绝不充足的预款抵扣余额',()=>assert.throws(()=>M.parseBackup(backup([{input:{...input,scenario:'prepay-offset',secondBalance:'100'}}])),/超过/));
+test('支持 UTF-8 BOM 备份',()=>assert.equal(M.parseBackup('\uFEFF'+backup([record])).length,1));
+test('正常恢复练习进度，拒绝篡改及越界状态',()=>{assert.deepEqual(M.readQuiz('{"version":1,"nextIndex":3,"correct":2}',8),{version:1,nextIndex:3,correct:2});for(const s of [null,'broken','{"version":1,"nextIndex":9,"correct":2}','{"version":1,"nextIndex":2,"correct":3}'])assert.equal(M.readQuiz(s,8).nextIndex,0);});
+test('最多 500 条，超额合并不修改已有数组',()=>{const existing=Array.from({length:500},(_,i)=>({...record,input:{...input,counterparty:'对象'+i},id:String(i)}));assert.throws(()=>M.mergeCases(existing,[record],()=> 'new'),/超过 500/);assert.equal(existing.length,500);});
+test('导入脚本文本只作为对象名称保留，不作为代码执行',()=>{const [r]=M.parseBackup(backup([{...record,input:{...input,counterparty:'<img src=x onerror=alert(1)>'},explanation:'<script>throw Error()</script>'}]));assert.equal(r.input.counterparty,'<img src=x onerror=alert(1)>');assert.equal(r.explanation,undefined);});
